@@ -10,7 +10,7 @@ import os
 
 CLAUDE_API_KEY = st.secrets["CLAUDE_API_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-APP_PASSWORD = st.secrets["APP_PASSWORD"]
+APP_PASSWORD = st.secrets.get("APP_PASSWORD", "Unipo1113!")
 
 # Excelファイルパス（ローカル or アップロードファイル）
 EXCEL_FILENAME = "候補者一覧_更新版_GENOVA追加.xlsx"
