@@ -10,6 +10,7 @@ from slack_sdk.errors import SlackApiError
 
 import os
 import time
+import datetime
 
 CLAUDE_API_KEY = st.secrets["CLAUDE_API_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -455,7 +456,7 @@ def get_slack_channels() -> list:
 def get_slack_messages(channel_id: str, days: int = 30) -> str:
     client = WebClient(token=SLACK_BOT_TOKEN)
     all_text = ""
-    oldest = str(time.time() - days * 86400)
+    oldest = str((datetime.datetime.utcnow() - datetime.timedelta(days=days)).timestamp())
     cursor = None
     try:
         while True:
