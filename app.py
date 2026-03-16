@@ -108,6 +108,7 @@ def load_candidates():
         if row[0]:
             candidates.append({
                 "name": str(row[0] or ""),
+                "decided_company": str(row[1] or ""),
                 "job_type": str(row[2] or ""),
                 "skills": str(row[3] or ""),
                 "age": str(row[4] or ""),
@@ -118,6 +119,40 @@ def load_candidates():
                 "comment": str(row[9] or ""),
             })
     return candidates
+
+
+def build_hire_profiles(candidates: list, companies: dict) -> str:
+    """各企業の過去内定者プロフィールをまとめたテキストを生成"""
+    # 企業名→シート名のマッピング
+    company_name_to_sheet = {info["company_name"]: sheet for sheet, info in companies.items()}
+
+    # 内定先企業ごとに候補者をグループ化
+    profiles_by_company = {}
+    for c in candidates:
+        decided = c["decided_company"].strip()
+        if not decided or decided == "None":
+            continue
+        # 部分一致でシート名を探す
+        matched_sheet = None
+        for company_name, sheet in company_name_to_sheet.items():
+            if decided in company_name or company_name in decided:
+                matched_sheet = sheet
+                break
+        if matched_sheet:
+            if matched_sheet not in profiles_by_company:
+                profiles_by_company[matched_sheet] = []
+            profiles_by_company[matched_sheet].append(c)
+
+    if not profiles_by_company:
+        return ""
+
+    text = "## 各企業の過去内定者プロフィール（実績データ）\n"
+    for sheet, hires in profiles_by_company.items():
+        company_name = companies[sheet]["company_name"]
+        text += f"\n### {company_name}（{len(hires)}名が内定）\n"
+        for h in hires:
+            text += f"- {h['job_type']}／{h['recent_industry']}／経験{h['total_experience']}／年齢{h['age']}歳／転職{h['job_change_count']}回\n"
+    return text
 
 
 def build_company_list(companies: dict) -> str:
@@ -136,7 +171,7 @@ def build_company_list(companies: dict) -> str:
 
 
 # ---- STEP 1: Claudeで上位8社を選出 ----
-def step1_rank_companies(candidate_text: str, companies: dict) -> list:
+def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: str = "") -> list:
     client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
     company_list = build_company_list(companies)
 
@@ -145,11 +180,16 @@ def step1_rank_companies(candidate_text: str, companies: dict) -> list:
 求職者情報と求人要件を照合し、内定確度の高い順に上位8社を選んでください。
 また、求職者の転職理由・今回の転職で目指しているキャリア・将来プランを文脈から推測してください。
 
+スコアリングの際は、求人要件とのマッチに加えて、各企業の過去内定者プロフィールとの類似度も重視してください。
+過去内定者に似た特徴（職種・業界・経験年数・年齢・スキル）を持つ候補者は内定確度が高いと判断してください。
+
 ## 求職者情報
 {candidate_text}
 
 ## 各企業の求人要件
 {company_list}
+
+{hire_profiles}
 
 ## 出力形式（JSONのみ返してください）
 ```json
@@ -326,7 +366,9 @@ def step3_enrich_pitches(candidate_text: str, step1_data: dict, gemini_info: str
 def run_analysis(candidate_text: str, companies: dict):
     progress = st.progress(0, text="Step 1/3 : Claudeがマッチング中...")
 
-    step1_data = step1_rank_companies(candidate_text, companies)
+    candidates = load_candidates()
+    hire_profiles = build_hire_profiles(candidates, companies)
+    step1_data = step1_rank_companies(candidate_text, companies, hire_profiles)
     if not step1_data:
         st.error("Step1の分析に失敗しました")
         return
