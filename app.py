@@ -14,6 +14,7 @@ CLAUDE_API_KEY = st.secrets["CLAUDE_API_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 APP_PASSWORD = st.secrets.get("APP_PASSWORD", "Unipo1113!")
 SLACK_BOT_TOKEN = st.secrets.get("SLACK_BOT_TOKEN", "")
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "Lionking7")
 
 # Excelファイルパス（ローカル or アップロードファイル）
 EXCEL_FILENAME = "候補者一覧_更新版_GENOVA追加.xlsx"
@@ -25,13 +26,20 @@ st.set_page_config(page_title="求人マッチングツール", page_icon="🎯"
 # ---- パスワード認証 ----
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
 
 if not st.session_state.authenticated:
     st.title("🔐 求人マッチングツール")
     pw = st.text_input("パスワードを入力してください", type="password")
     if st.button("ログイン"):
-        if pw == APP_PASSWORD:
+        if pw == ADMIN_PASSWORD:
             st.session_state.authenticated = True
+            st.session_state.is_admin = True
+            st.rerun()
+        elif pw == APP_PASSWORD:
+            st.session_state.authenticated = True
+            st.session_state.is_admin = False
             st.rerun()
         else:
             st.error("パスワードが違います")
@@ -548,7 +556,11 @@ st.caption("候補者情報を貼り付け or ファイルアップロードす�
 companies = load_company_requirements()
 candidates = load_candidates()
 
-tab1, tab2, tab3 = st.tabs(["📋 既存候補者から選ぶ", "📄 テキスト貼り付け / ファイルアップロード", "💬 Slack連携で求人要件を更新"])
+if st.session_state.is_admin:
+    tab1, tab2, tab3 = st.tabs(["📋 既存候補者から選ぶ", "📄 テキスト貼り付け / ファイルアップロード", "💬 Slack連携で求人要件を更新"])
+else:
+    tab1, tab2 = st.tabs(["📋 既存候補者から選ぶ", "📄 テキスト貼り付け / ファイルアップロード"])
+    tab3 = None
 
 # ---- Tab1 ----
 with tab1:
@@ -610,62 +622,63 @@ with tab2:
         else:
             run_analysis(combined_text, companies)
 
-# ---- Tab3: Slack連携 ----
-with tab3:
-    st.markdown("Slackチャンネルから求人要件を読み取り、Excelを更新してダウンロードできます。")
+# ---- Tab3: Slack連携（管理者のみ） ----
+if st.session_state.is_admin:
+    with tab3:
+        st.markdown("Slackチャンネルから求人要件を読み取り、Excelを更新してダウンロードできます。")
 
-    if not SLACK_BOT_TOKEN:
-        st.error("Slack Bot Tokenが設定されていません")
-    else:
-        channels = get_slack_channels()
-        if not channels:
-            st.error("チャンネルが取得できませんでした。Botをチャンネルに招待してください。")
+        if not SLACK_BOT_TOKEN:
+            st.error("Slack Bot Tokenが設定されていません")
         else:
-            channel_options = {ch["name"]: ch["id"] for ch in channels}
-            selected_channel = st.selectbox("チャンネルを選択", list(channel_options.keys()))
-            days = st.slider("取得する期間（日数）", min_value=7, max_value=365, value=90, step=7, format="%d日")
+            channels = get_slack_channels()
+            if not channels:
+                st.error("チャンネルが取得できませんでした。Botをチャンネルに招待してください。")
+            else:
+                channel_options = {ch["name"]: ch["id"] for ch in channels}
+                selected_channel = st.selectbox("チャンネルを選択", list(channel_options.keys()))
+                days = st.slider("取得する期間（日数）", min_value=7, max_value=365, value=90, step=7, format="%d日")
 
-            if st.button("📥 Slackから読み取る", type="primary"):
-                with st.spinner("Slackメッセージを取得中..."):
-                    channel_id = channel_options[selected_channel]
-                    slack_text = get_slack_messages(channel_id, days=days)
+                if st.button("📥 Slackから読み取る", type="primary"):
+                    with st.spinner("Slackメッセージを取得中..."):
+                        channel_id = channel_options[selected_channel]
+                        slack_text = get_slack_messages(channel_id, days=days)
 
-                if not slack_text.strip():
-                    st.warning("メッセージが取得できませんでした")
-                else:
-                    with st.spinner("Claudeが求人要件を抽出中..."):
-                        extracted = extract_requirements_from_slack(slack_text, companies)
-
-                    if not extracted:
-                        st.warning("求人要件を抽出できませんでした。チャンネルに要件に関する投稿があるか確認してください。")
+                    if not slack_text.strip():
+                        st.warning("メッセージが取得できませんでした")
                     else:
-                        st.success(f"{len(extracted)}社分の要件を抽出しました。内容を確認してください。")
-                        st.session_state["slack_extracted"] = extracted
+                        with st.spinner("Claudeが求人要件を抽出中..."):
+                            extracted = extract_requirements_from_slack(slack_text, companies)
 
-            if "slack_extracted" in st.session_state and st.session_state["slack_extracted"]:
-                extracted = st.session_state["slack_extracted"]
-                for i, item in enumerate(extracted):
-                    col_check, col_content = st.columns([1, 10])
-                    with col_check:
-                        checked = st.checkbox("更新する", value=True, key=f"check_{i}")
-                        extracted[i]["_include"] = checked
-                    with col_content:
-                        with st.expander(f"**{item['company_name']}**", expanded=True):
-                            extracted[i]["must"] = st.text_area("必須要件", value=item.get("must", ""), key=f"must_{i}")
-                            extracted[i]["want"] = st.text_area("歓迎要件", value=item.get("want", ""), key=f"want_{i}")
-                            extracted[i]["description"] = st.text_area("業務内容", value=item.get("description", ""), key=f"desc_{i}")
+                        if not extracted:
+                            st.warning("求人要件を抽出できませんでした。チャンネルに要件に関する投稿があるか確認してください。")
+                        else:
+                            st.success(f"{len(extracted)}社分の要件を抽出しました。内容を確認してください。")
+                            st.session_state["slack_extracted"] = extracted
 
-                st.markdown("---")
-                if st.button("✅ この内容でExcelを更新してダウンロード", type="primary"):
-                    selected = [item for item in extracted if item.get("_include", True)]
-                    if not selected:
-                        st.warning("更新する企業を1社以上選択してください")
-                    else:
-                        updated_bytes = update_excel_with_requirements(selected, companies)
-                        st.download_button(
-                            label="📥 更新済みExcelをダウンロード",
-                            data=updated_bytes,
-                            file_name="候補者一覧_更新版_GENOVA追加.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        )
-                        st.success(f"{len(selected)}社分を更新しました。ファイルを差し替えてください。")
+                if "slack_extracted" in st.session_state and st.session_state["slack_extracted"]:
+                    extracted = st.session_state["slack_extracted"]
+                    for i, item in enumerate(extracted):
+                        col_check, col_content = st.columns([1, 10])
+                        with col_check:
+                            checked = st.checkbox("更新する", value=True, key=f"check_{i}")
+                            extracted[i]["_include"] = checked
+                        with col_content:
+                            with st.expander(f"**{item['company_name']}**", expanded=True):
+                                extracted[i]["must"] = st.text_area("必須要件", value=item.get("must", ""), key=f"must_{i}")
+                                extracted[i]["want"] = st.text_area("歓迎要件", value=item.get("want", ""), key=f"want_{i}")
+                                extracted[i]["description"] = st.text_area("業務内容", value=item.get("description", ""), key=f"desc_{i}")
+
+                    st.markdown("---")
+                    if st.button("✅ この内容でExcelを更新してダウンロード", type="primary"):
+                        selected = [item for item in extracted if item.get("_include", True)]
+                        if not selected:
+                            st.warning("更新する企業を1社以上選択してください")
+                        else:
+                            updated_bytes = update_excel_with_requirements(selected, companies)
+                            st.download_button(
+                                label="📥 更新済みExcelをダウンロード",
+                                data=updated_bytes,
+                                file_name="候補者一覧_更新版_GENOVA追加.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            )
+                            st.success(f"{len(selected)}社分を更新しました。ファイルを差し替えてください。")
