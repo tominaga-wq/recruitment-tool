@@ -345,7 +345,7 @@ def run_analysis(candidate_text: str, companies: dict):
         st.warning(f"Gemini検索でエラーが発生しました（スキップして続行）: {e}")
         gemini_info = "企業情報の取得に失敗しました。"
 
-    progress.progress(66, text="Step 3/3 : Claudeが訴求文を生成中...")
+    progress.progress(66, text="Step 3/3 : Geminiが訴求文を生成中...")
 
     final_data = step3_enrich_pitches(candidate_text, step1_data, gemini_info, companies)
 
