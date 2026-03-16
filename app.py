@@ -19,8 +19,8 @@ SLACK_BOT_TOKEN = st.secrets.get("SLACK_BOT_TOKEN", "")
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "Lionking7")
 
 # Excelファイルパス（ローカル or アップロードファイル）
-EXCEL_FILENAME = "候補者一覧_更新版_GENOVA追加.xlsx"
-LOCAL_EXCEL_PATH = r"C:\Users\takeu\Downloads\候補者一覧_更新版_GENOVA追加.xlsx"
+EXCEL_FILENAME = "求人確度出力マスターシート.xlsx"
+LOCAL_EXCEL_PATH = r"C:\Users\takeu\Downloads\求人確度出力マスターシート.xlsx"
 EXCEL_PATH = LOCAL_EXCEL_PATH if os.path.exists(LOCAL_EXCEL_PATH) else EXCEL_FILENAME
 
 st.set_page_config(page_title="求人マッチングツール", page_icon="🎯", layout="wide")
@@ -699,7 +699,7 @@ if st.session_state.is_admin:
                             st.download_button(
                                 label="📥 更新済みExcelをダウンロード",
                                 data=updated_bytes,
-                                file_name="候補者一覧_更新版_GENOVA追加.xlsx",
+                                file_name="求人確度出力マスターシート.xlsx",
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             )
                             st.success(f"{len(selected)}社分を更新しました。ファイルを差し替えてください。")
