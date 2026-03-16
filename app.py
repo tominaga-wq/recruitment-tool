@@ -477,6 +477,8 @@ def get_slack_messages(channel_id: str, days: int = 30) -> str:
                 break
     except SlackApiError as e:
         st.error(f"Slack取得エラー: {e}")
+    except Exception as e:
+        st.error(f"予期せぬエラー: {e}")
     return all_text
 
 
@@ -636,7 +638,7 @@ if st.session_state.is_admin:
             else:
                 channel_options = {ch["name"]: ch["id"] for ch in channels}
                 selected_channel = st.selectbox("チャンネルを選択", list(channel_options.keys()))
-                days = st.slider("取得する期間（日数）", min_value=7, max_value=365, value=90, step=7, format="%d日")
+                days = st.slider("取得する期間（日数）", min_value=7, max_value=365, value=90, step=7)
 
                 if st.button("📥 Slackから読み取る", type="primary"):
                     with st.spinner("Slackメッセージを取得中..."):
