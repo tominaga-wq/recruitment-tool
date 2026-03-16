@@ -486,8 +486,12 @@ def get_slack_messages(channel_id: str, days: int = 30) -> str:
 # ---- Slack連携: Claudeで求人要件を抽出 ----
 def extract_requirements_from_slack(slack_text: str, companies: dict) -> list:
     client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
-    company_names = [info["company_name"] for info in companies.values()]
-    company_list_str = "\n".join(f"- {name}" for name in company_names)
+    # シート名と企業名の両方を渡す
+    company_list_str = "\n".join(
+        f"- {sheet}（{info['company_name']}）" for sheet, info in companies.items()
+    )
+    # Slackテキストが長すぎる場合は先頭15000文字に絞る
+    slack_text_trimmed = slack_text[:15000] if len(slack_text) > 15000 else slack_text
 
     prompt = f"""以下のSlackメッセージから、各企業の求人要件を「必須要件」と「歓迎要件」に分けて抽出してください。
 
@@ -497,30 +501,30 @@ def extract_requirements_from_slack(slack_text: str, companies: dict) -> list:
 
 業務内容は抽出不要です。要件のみ抽出してください。
 
-## 登録済み企業一覧（日本語名・英語名の両方で記載）
+## 登録済み企業一覧（シート名＋日本語名）
 {company_list_str}
 
 ## Slackメッセージ
-{slack_text}
+{slack_text_trimmed}
 
-## 重要なマッチングルール
-- Slackの企業名と登録済み企業一覧は表記が異なる場合があります（例：「XMile社」→「エックスマイル」、「リクルート」→「SUUMOカウンター」など）
+## マッチングルール
+- Slackの企業名と登録済み企業一覧は表記が異なります（例：「XMile社」→「エックスマイル」、「リクルート」→「リクルートスタッフィング」など）
 - 部分一致・読み仮名・略称でも積極的にマッチングしてください
-- 確信が持てる場合は、登録済み企業一覧の中で最も近い企業名を使用してください
+- company_nameには登録済み企業一覧の**日本語名**をそのまま使用してください
 
 ## 出力形式（JSONのみ返してください）
 [
   {{
-    "company_name": "登録済み企業一覧の中で最も近い企業名",
+    "company_name": "登録済み企業一覧の日本語名をそのまま記載",
     "must": "抽出した必須要件（なければ空文字）",
     "want": "抽出した歓迎要件（なければ空文字）"
   }}
 ]
 
-企業名が一覧にどうしても一致しない場合はスキップしてください。要件が読み取れない企業もスキップしてください。"""
+企業名が一覧にどうしても一致しない場合はスキップしてください。"""
 
     message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model="claude-sonnet-4-6",
         max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )
