@@ -283,8 +283,7 @@ def step3_enrich_pitches(candidate_text: str, step1_data: dict, gemini_info: str
     "match_reason": "スキル・経験面からのマッチ理由（候補者の具体的な実績・数字を引用して3〜4文）",
     "pitch_reason": "【転職理由との合致】候補者の転職理由とこの求人がどう合致するか。Geminiの企業情報も交えて200文字以上で具体的に",
     "pitch_career": "【今回の転職で目指しているキャリアとの合致】候補者が目指すキャリアに対してこの求人でどんな経験・成長が得られるか。Geminiの企業情報も交えて200文字以上で具体的に",
-    "pitch_future": "【将来プランとの合致】候補者の長期ビジョンに対してこの企業・ポジションがどうつながるか。Geminiの企業情報も交えて200文字以上で具体的に",
-    "pitch_message": "担当者が候補者に直接伝えるトークスクリプト。候補者の名前・企業の最新情報を入れ、感情に響く言葉で200文字以上"
+    "pitch_future": "【将来プランとの合致】候補者の長期ビジョンに対してこの企業・ポジションがどうつながるか。Geminiの企業情報も交えて200文字以上で具体的に"
   }}
 ]
 """
@@ -381,8 +380,6 @@ def show_results(data: dict):
                 st.markdown(f"**転職理由との合致**\n\n{r.get('pitch_reason', '')}")
                 st.markdown(f"**今回の転職で目指しているキャリアとの合致**\n\n{r.get('pitch_career', '')}")
                 st.markdown(f"**将来プランとの合致**\n\n{r.get('pitch_future', '')}")
-                st.markdown("---")
-                st.info(f"💬 **担当者トークスクリプト**\n\n{r.get('pitch_message', '')}")
             with col_right:
                 st.metric("内定確度スコア", f"{r.get('match_score', '-')}/100")
 
