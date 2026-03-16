@@ -8,10 +8,9 @@ from google.genai import types
 
 import os
 
-# ローカル実行時はハードコード、Streamlit Cloud時はsecretsから取得
-CLAUDE_API_KEY = st.secrets.get("CLAUDE_API_KEY", "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")
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyDWjXUvrE3r05J9VDnRAT9daqX4nmOUOXQ")
-APP_PASSWORD = st.secrets.get("APP_PASSWORD", "genova2024")
+CLAUDE_API_KEY = st.secrets["CLAUDE_API_KEY"]
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+APP_PASSWORD = st.secrets["APP_PASSWORD"]
 
 # Excelファイルパス（ローカル or アップロードファイル）
 EXCEL_FILENAME = "候補者一覧_更新版_GENOVA追加.xlsx"
