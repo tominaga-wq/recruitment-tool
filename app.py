@@ -9,6 +9,7 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 import os
+import time
 
 CLAUDE_API_KEY = st.secrets["CLAUDE_API_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -452,7 +453,6 @@ def get_slack_channels() -> list:
 
 # ---- Slack連携: メッセージ取得（スレッド含む・日数指定） ----
 def get_slack_messages(channel_id: str, days: int = 30) -> str:
-    import time
     client = WebClient(token=SLACK_BOT_TOKEN)
     all_text = ""
     oldest = str(time.time() - days * 86400)
@@ -646,7 +646,7 @@ if st.session_state.is_admin:
                         slack_text = get_slack_messages(channel_id, days=days)
 
                     if not slack_text.strip():
-                        st.warning(f"メッセージが取得できませんでした（channel: {channel_id}, days: {days}）")
+                        st.warning(f"メッセージが取得できませんでした（channel: {channel_id}, days: {days}, oldest: {str(time.time() - days * 86400)[:10]}）")
                     else:
                         with st.spinner("Claudeが求人要件を抽出中..."):
                             extracted = extract_requirements_from_slack(slack_text, companies)
