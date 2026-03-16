@@ -489,7 +489,13 @@ def extract_requirements_from_slack(slack_text: str, companies: dict) -> list:
     company_names = [info["company_name"] for info in companies.values()]
     company_list_str = "\n".join(f"- {name}" for name in company_names)
 
-    prompt = f"""以下のSlackメッセージから、各企業の求人要件（必須条件・歓迎条件・業務内容）を抽出してください。
+    prompt = f"""以下のSlackメッセージから、各企業の求人要件を「必須要件」と「歓迎要件」に分けて抽出してください。
+
+## 分類の基準
+- **必須要件（must）**：「必須」「必要」「要件」「書類要件」「〜であること」「〜経験必須」「〜以上」など、応募に必要な条件として書かれているもの
+- **歓迎要件（want）**：「歓迎」「尚可」「あれば」「望ましい」「プラス」「あると嬉しい」など、あれば有利という表現のもの
+
+業務内容は抽出不要です。要件のみ抽出してください。
 
 ## 登録済み企業一覧
 {company_list_str}
@@ -501,9 +507,8 @@ def extract_requirements_from_slack(slack_text: str, companies: dict) -> list:
 [
   {{
     "company_name": "企業名（上記一覧と一致する名前）",
-    "must": "抽出した必須要件",
-    "want": "抽出した歓迎要件（なければ空文字）",
-    "description": "抽出した業務内容（なければ空文字）"
+    "must": "抽出した必須要件（なければ空文字）",
+    "want": "抽出した歓迎要件（なければ空文字）"
   }}
 ]
 
@@ -540,11 +545,16 @@ def update_excel_with_requirements(updates: list, companies: dict) -> bytes:
                 continue
             label = str(row[0].value)
             if ("必須" in label or "Must" in label) and update.get("must"):
+                # 必須要件は上書き
                 row[1].value = update["must"]
             elif ("歓迎" in label or "Want" in label) and update.get("want"):
-                row[1].value = update["want"]
-            elif ("業務内容" in label or "仕事内容" in label) and update.get("description"):
-                row[1].value = update["description"]
+                # 歓迎要件は追記
+                existing = str(row[1].value) if row[1].value else ""
+                new_want = update["want"]
+                if existing and new_want not in existing:
+                    row[1].value = existing + "\n" + new_want
+                elif not existing:
+                    row[1].value = new_want
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -669,7 +679,6 @@ if st.session_state.is_admin:
                             with st.expander(f"**{item['company_name']}**", expanded=True):
                                 extracted[i]["must"] = st.text_area("必須要件", value=item.get("must", ""), key=f"must_{i}")
                                 extracted[i]["want"] = st.text_area("歓迎要件", value=item.get("want", ""), key=f"want_{i}")
-                                extracted[i]["description"] = st.text_area("業務内容", value=item.get("description", ""), key=f"desc_{i}")
 
                     st.markdown("---")
                     if st.button("✅ この内容でExcelを更新してダウンロード", type="primary"):
