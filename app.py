@@ -233,9 +233,9 @@ def step2_search_companies(company_names: list) -> str:
     raise Exception("利用可能なGeminiモデルが見つかりませんでした")
 
 
-# ---- STEP 3: Claudeで訴求文を肉付け生成 ----
+# ---- STEP 3: Geminiで訴求文を肉付け生成 ----
 def step3_enrich_pitches(candidate_text: str, step1_data: dict, gemini_info: str, companies: dict) -> dict:
-    client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     top8 = step1_data.get("top8", [])
     summary = step1_data.get("candidate_summary", {})
@@ -274,8 +274,7 @@ def step3_enrich_pitches(candidate_text: str, step1_data: dict, gemini_info: str
 ## Geminiが収集した企業リサーチ情報（Google検索結果）
 {gemini_info}
 
-## 出力形式（JSONのみ返してください）
-```json
+## 出力形式（JSONのみ返してください。余分なテキストは不要です）
 [
   {{
     "rank": 1,
@@ -290,14 +289,23 @@ def step3_enrich_pitches(candidate_text: str, step1_data: dict, gemini_info: str
     "pitch_message": "担当者が候補者に直接伝えるトークスクリプト。候補者の名前・企業の最新情報を入れ、感情に響く言葉で200文字以上"
   }}
 ]
-```
 """
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=16000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = message.content[0].text
+    raw = ""
+    for model_name in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash"]:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            raw = response.text
+            break
+        except Exception:
+            continue
+
+    if not raw:
+        st.error("Step3: Geminiによる訴求文生成に失敗しました")
+        return {}
+
     try:
         start = raw.find("[")
         end = raw.rfind("]") + 1
