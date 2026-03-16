@@ -647,7 +647,7 @@ if st.session_state.is_admin:
                         slack_text = get_slack_messages(channel_id, days=days)
 
                     if not slack_text.strip():
-                        st.warning(f"メッセージが取得できませんでした（channel: {channel_id}, days: {days}, oldest: {str(time.time() - days * 86400)[:10]}）")
+                        st.warning("メッセージが取得できませんでした")
                     else:
                         with st.spinner("Claudeが求人要件を抽出中..."):
                             extracted = extract_requirements_from_slack(slack_text, companies)
