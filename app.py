@@ -442,21 +442,31 @@ def get_slack_channels() -> list:
     return channels
 
 
-# ---- Slack連携: メッセージ取得（スレッド含む） ----
-def get_slack_messages(channel_id: str, limit: int = 50) -> str:
+# ---- Slack連携: メッセージ取得（スレッド含む・日数指定） ----
+def get_slack_messages(channel_id: str, days: int = 30) -> str:
+    import time
     client = WebClient(token=SLACK_BOT_TOKEN)
     all_text = ""
+    oldest = str(time.time() - days * 86400)
+    cursor = None
     try:
-        res = client.conversations_history(channel=channel_id, limit=limit)
-        for msg in reversed(res["messages"]):
-            text = msg.get("text", "")
-            ts = msg.get("ts", "")
-            all_text += f"{text}\n"
-            # スレッド返信も取得
-            if msg.get("reply_count", 0) > 0:
-                thread_res = client.conversations_replies(channel=channel_id, ts=ts)
-                for reply in thread_res["messages"][1:]:
-                    all_text += f"  └ {reply.get('text', '')}\n"
+        while True:
+            kwargs = {"channel": channel_id, "oldest": oldest, "limit": 200}
+            if cursor:
+                kwargs["cursor"] = cursor
+            res = client.conversations_history(**kwargs)
+            for msg in reversed(res["messages"]):
+                text = msg.get("text", "")
+                ts = msg.get("ts", "")
+                all_text += f"{text}\n"
+                if msg.get("reply_count", 0) > 0:
+                    thread_res = client.conversations_replies(channel=channel_id, ts=ts)
+                    for reply in thread_res["messages"][1:]:
+                        all_text += f"  └ {reply.get('text', '')}\n"
+            if res.get("has_more") and res.get("response_metadata", {}).get("next_cursor"):
+                cursor = res["response_metadata"]["next_cursor"]
+            else:
+                break
     except SlackApiError as e:
         st.error(f"Slack取得エラー: {e}")
     return all_text
@@ -613,12 +623,12 @@ with tab3:
         else:
             channel_options = {ch["name"]: ch["id"] for ch in channels}
             selected_channel = st.selectbox("チャンネルを選択", list(channel_options.keys()))
-            msg_limit = st.slider("取得するメッセージ数", min_value=10, max_value=200, value=50, step=10)
+            days = st.slider("取得する期間（日数）", min_value=7, max_value=365, value=90, step=7, format="%d日")
 
             if st.button("📥 Slackから読み取る", type="primary"):
                 with st.spinner("Slackメッセージを取得中..."):
                     channel_id = channel_options[selected_channel]
-                    slack_text = get_slack_messages(channel_id, limit=msg_limit)
+                    slack_text = get_slack_messages(channel_id, days=days)
 
                 if not slack_text.strip():
                     st.warning("メッセージが取得できませんでした")
