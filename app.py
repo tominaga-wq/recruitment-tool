@@ -645,18 +645,27 @@ with tab3:
             if "slack_extracted" in st.session_state and st.session_state["slack_extracted"]:
                 extracted = st.session_state["slack_extracted"]
                 for i, item in enumerate(extracted):
-                    with st.expander(f"**{item['company_name']}**", expanded=True):
-                        extracted[i]["must"] = st.text_area("必須要件", value=item.get("must", ""), key=f"must_{i}")
-                        extracted[i]["want"] = st.text_area("歓迎要件", value=item.get("want", ""), key=f"want_{i}")
-                        extracted[i]["description"] = st.text_area("業務内容", value=item.get("description", ""), key=f"desc_{i}")
+                    col_check, col_content = st.columns([1, 10])
+                    with col_check:
+                        checked = st.checkbox("更新する", value=True, key=f"check_{i}")
+                        extracted[i]["_include"] = checked
+                    with col_content:
+                        with st.expander(f"**{item['company_name']}**", expanded=True):
+                            extracted[i]["must"] = st.text_area("必須要件", value=item.get("must", ""), key=f"must_{i}")
+                            extracted[i]["want"] = st.text_area("歓迎要件", value=item.get("want", ""), key=f"want_{i}")
+                            extracted[i]["description"] = st.text_area("業務内容", value=item.get("description", ""), key=f"desc_{i}")
 
                 st.markdown("---")
                 if st.button("✅ この内容でExcelを更新してダウンロード", type="primary"):
-                    updated_bytes = update_excel_with_requirements(extracted, companies)
-                    st.download_button(
-                        label="📥 更新済みExcelをダウンロード",
-                        data=updated_bytes,
-                        file_name="候補者一覧_更新版_GENOVA追加.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-                    st.success("ダウンロードできます。ファイルを差し替えてください。")
+                    selected = [item for item in extracted if item.get("_include", True)]
+                    if not selected:
+                        st.warning("更新する企業を1社以上選択してください")
+                    else:
+                        updated_bytes = update_excel_with_requirements(selected, companies)
+                        st.download_button(
+                            label="📥 更新済みExcelをダウンロード",
+                            data=updated_bytes,
+                            file_name="候補者一覧_更新版_GENOVA追加.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        )
+                        st.success(f"{len(selected)}社分を更新しました。ファイルを差し替えてください。")
