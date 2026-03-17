@@ -39,20 +39,19 @@ COMPANY_PASS_DIFFICULTY = {
     "ガリバー": 5, "ソフトバンク販売クルー": 5, "ウィルオブコンストラクション": 5, "夢真": 5,
 }
 
+def get_h_score(company_name: str) -> int:
+    """企業名からHスコアを取得（1=最難関, 5=最も通りやすい）。未登録企業はデフォルト3"""
+    for key, val in COMPANY_PASS_DIFFICULTY.items():
+        if key in company_name or company_name in key:
+            return val
+    return 3  # デフォルト
+
 def build_difficulty_hint(companies: dict) -> str:
-    """企業名→難易度ヒント文字列を生成（1=難, 5=易 → H換算: H=6-難易度）"""
+    """プロンプト用: 企業別Hスコア一覧"""
     lines = []
     for sheet_name, info in companies.items():
-        cname = info["company_name"]
-        # 部分一致でマッチング
-        matched = None
-        for key, val in COMPANY_PASS_DIFFICULTY.items():
-            if key in cname or cname in key:
-                matched = val
-                break
-        if matched is not None:
-            h_equiv = 6 - matched  # 1=難→H=5、5=易→H=1
-            lines.append(f"- {cname}：通過難易度{matched}（H採点の目安={h_equiv}）")
+        h = get_h_score(info["company_name"])
+        lines.append(f"- {info['company_name']}：H={h}")
     return "\n".join(lines)
 
 # Excelファイルパス（ローカル or アップロードファイル）
@@ -240,25 +239,11 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 
 【重要】各企業に【NG要件】が設定されている場合、候補者がそのNG要件に1つでも該当するならその企業は必ず選出から除外してください。NG要件に該当する企業は8社のカウントに含めないでください。
 
-## 各項目を1〜5点で採点してください
+## あなたが採点する項目（S と A のみ）
 - S（スキルマッチ）：経験・経歴の親和性と過去内定事例との類似度を総合評価。5=完全一致、1=ほぼ合致なし
 - A（志向性の一致）：本人の希望条件・転職理由との合致度。5=まさに求めている、1=全く合わない
-- H（採用ハードル）：選考難易度。5=最難関（書類落ちリスク大）、1=容易（ほぼ確実に通過）
 
-【H採点の必須ルール】
-- 候補者が【必須要件（Must）】を1つでも満たさない場合は、必ずH=5にしてください
-- 必須要件を全て満たす場合は、企業別難易度データと競争率に応じて1〜4で採点してください
-- 全社をH=3にすることは厳禁です
-
-## カテゴリ分類ルール（必ず以下の社数になるよう8社を選んでください）
-- チャレンジ（1〜2社）：H=4または5の企業かつA≥3。必ずH=4か5をつけてください
-- 本命（2〜3社）：H=3の企業かつA≥3。必ずH=3をつけてください
-- セーフティー（3〜5社）：H=1または2の企業かつA≥2。必ずH=1か2をつけてください
-
-【厳守事項】
-- セーフティーは必ず3社以上選んでください。そのためにH=1〜2（難易度4〜5）の企業を最低3社含めてください
-- H=3の企業をセーフティーに分類するのは禁止です
-- 合計8社になるよう調整してください
+※ H（採用ハードル）はシステムが自動付与するため、あなたは採点不要です。
 
 ## 求職者情報
 {candidate_text}
@@ -266,8 +251,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 ## 各企業の求人要件
 {company_list}
 
-## 企業別・選考通過難易度データ（実績ベース）
-以下のH採点目安を参考にしてください。ただし候補者が必須要件を満たさない場合は必ずH=5にしてください。
+## 企業別・採用ハードルスコア（参考情報）
 {difficulty_hint}
 
 {hire_profiles}
@@ -289,8 +273,6 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
       "position": "ポジション名",
       "S": 4,
       "A": 5,
-      "H": 4,
-      "category": "本命",
       "match_reason": "スキル・経験面からのマッチ理由（候補者の具体的な実績・数字を引用して3〜4文）"
     }}
   ]
@@ -497,17 +479,18 @@ def run_analysis(candidate_text: str, companies: dict):
 
 
 def classify_company(r: dict) -> str:
-    """S/A/Hスコアから チャレンジ/本命/セーフティー を判定"""
+    """P = 10 - (S + H) のゴルフスコア方式で分類"""
     S = r.get("S", 0)
     A = r.get("A", 0)
-    H = r.get("H", 0)
-    if H >= 4 and A >= 3:
+    H = r.get("H", 3)
+    P = 10 - (S + H)
+    if P >= 6 and A >= 4:
         return "チャレンジ"
-    if H <= 2 and A >= 2:
-        return "セーフティー"
-    if A >= 3 and S >= 3:
+    if 3 <= P <= 5 and A >= 3:
         return "本命"
-    return "参考"
+    if P <= 2 and A >= 2:
+        return "セーフティー"
+    return "その他"
 
 
 def show_results_fast(data: dict):
@@ -523,9 +506,11 @@ def show_results_fast(data: dict):
         col2.markdown(f"**今回の転職で目指しているキャリア**\n\n{summary.get('inferred_career', '')}")
         col3.markdown(f"**将来プラン**\n\n{summary.get('inferred_future', '')}")
 
-    # Claudeが出力したcategoryを使用（なければフォールバックで計算）
+    # システムがHを付与してPを計算し分類
     for r in top8:
-        r["_category"] = r.get("category") or classify_company(r)
+        r["H"] = get_h_score(r.get("company_name", ""))
+        r["P"] = 10 - (r["S"] + r["H"]) if isinstance(r.get("S"), int) else "-"
+        r["_category"] = classify_company(r)
 
     categories = [
         ("チャレンジ", "🔥 チャレンジ"),
@@ -539,14 +524,18 @@ def show_results_fast(data: dict):
             continue
         st.markdown(f"### {label}")
         for r in items:
-            S, A, H = r.get("S", "-"), r.get("A", "-"), r.get("H", "-")
-            header = f"**{r['company_name']}**　S:{S} A:{A} H:{H}"
+            S = r.get("S", "-")
+            A = r.get("A", "-")
+            H = r.get("H", "-")
+            P = r.get("P", "-")
+            header = f"**{r['company_name']}**　P:{P}　S:{S} A:{A} H:{H}"
             with st.expander(header, expanded=True):
                 col_left, col_right = st.columns([3, 1])
                 with col_left:
                     st.write(f"**ポジション：** {r.get('position', '')}")
                     st.markdown(f"**マッチ理由**\n\n{r.get('match_reason', '')}")
                 with col_right:
+                    st.metric("P 内定確度", f"{P}")
                     st.metric("S スキル", f"{S}/5")
                     st.metric("A 志向性", f"{A}/5")
                     st.metric("H ハードル", f"{H}/5")
