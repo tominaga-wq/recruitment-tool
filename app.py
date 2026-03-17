@@ -86,7 +86,7 @@ def load_company_requirements():
             continue
         ws = wb[sheet_name]
         rows = list(ws.iter_rows(values_only=True))
-        info = {"company_name": "", "position": "", "must": "", "want": "", "description": ""}
+        info = {"company_name": "", "position": "", "must": "", "want": "", "ng": "", "description": ""}
         for row in rows:
             if not row[0]:
                 continue
@@ -101,6 +101,8 @@ def load_company_requirements():
                 info["must"] = value
             elif "歓迎" in label or "Want" in label:
                 info["want"] = value
+            elif "NG条件" in label or "NG" in label:
+                info["ng"] = value
             elif "業務内容" in label or "仕事内容" in label:
                 info["description"] = value
         if not info["company_name"]:
@@ -171,13 +173,14 @@ def build_hire_profiles(candidates: list, companies: dict) -> str:
 def build_company_list(companies: dict) -> str:
     text = ""
     for sheet_name, info in companies.items():
+        ng_line = f"\n【NG要件】{info['ng']}" if info.get('ng') else ""
         text += f"""
 ---
 【企業シート名】{sheet_name}
 【企業名】{info['company_name']}
 【ポジション】{info['position']}
 【必須要件（Must）】{info['must']}
-【歓迎要件（Want）】{info['want']}
+【歓迎要件（Want）】{info['want']}{ng_line}
 【業務内容】{info['description']}
 """
     return text
@@ -196,6 +199,8 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 
 スコアリングの際は、求人要件とのマッチに加えて、各企業の過去内定者プロフィールとの類似度も重視してください。
 過去内定者に似た特徴（職種・業界・経験年数・年齢・スキル）を持つ候補者は内定確度が高いと判断してください。
+
+【重要】各企業に【NG要件】が設定されている場合、候補者がそのNG要件に1つでも該当するならその企業は必ず選出から除外してください。NG要件に該当する企業は8社のカウントに含めないでください。
 
 ## 求職者情報
 {candidate_text}
