@@ -256,35 +256,18 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 2. 【必須要件（Must）】を明らかに満たさない企業は除外（曖昧・判断が難しい場合は除外せず残すこと）
 
 ━━━━━━━━━━━━━━━━━━━━
-【二次選考】約20社 → 上位8社を選出
+【二次選考】約20社 → 全社にS・A採点
 ━━━━━━━━━━━━━━━━━━━━
-一次選考を通過した企業に対して、以下の手順で処理してください。
+一次選考を通過した企業全社に対して以下を行い、全社分をJSONで出力してください。
 
 ① S・A を採点
 - S（スキルマッチ）：経験・経歴の親和性。5=完全一致、1=ほぼ合致なし
 - A（志向性の一致）：転職理由・希望キャリア・将来プランとの合致度。5=まさに求めている、1=全く合わない
+- H未登録企業はSを保守的に採点し、H_estimatedを推定（1=最難関, 5=最も通りやすい）
 
-② H を各企業に付与
-- 登録済み企業：「企業別・採用ハードルスコア」に記載のH値をそのまま使用
-- 未登録企業：Must要件・年齢制限・経験年数・学歴条件の厳しさから推定（1=最難関, 5=最も通りやすい）。Sは保守的に採点。
-
-③ 内定実績ボーナス
+② 内定実績ボーナス
 - 過去内定者と類似する場合、S +1点（最大5点）
 - match_reasonに「※内定実績との類似：〇〇と類似」と根拠を記載
-
-④ P（内定確度）を算出
-- P = S + H
-
-⑤ 約20社を全て分類
-- セーフティー：P ≥ 7 かつ A ≥ 2
-- 本命：P = 5〜6 かつ A ≥ 3
-- チャレンジ：P = 2〜4 かつ A ≥ 4
-
-⑥ 分類結果から8社を選出
-- チャレンジ：1〜2社
-- 本命：1〜3社
-- セーフティー：3〜4社
-- 各カテゴリ内はPが高い順で選出。同点の場合は内定実績がある企業を優先。
 
 ## 求職者情報
 {candidate_text}
@@ -306,17 +289,14 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
     "inferred_career": "推測した今回の転職で目指しているキャリア（2〜3文）",
     "inferred_future": "推測した将来プラン（2〜3文）"
   }},
-  "top8": [
+  "candidates_scored": [
     {{
-      "rank": 1,
       "sheet_name": "シート名",
       "company_name": "企業名",
       "position": "ポジション名",
       "S": 4,
       "A": 5,
-      "H": 3,
-      "P": 7,
-      "category": "セーフティー",
+      "H_estimated": 3,
       "match_reason": "スキル・経験面からのマッチ理由（候補者の具体的な実績・数字を引用して3〜4文）"
     }}
   ]
@@ -325,14 +305,18 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 """
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=4000,
+        max_tokens=6000,
         messages=[{"role": "user", "content": prompt}],
     )
     raw = message.content[0].text
     try:
         start = raw.find("{")
         end = raw.rfind("}") + 1
-        return json.loads(raw[start:end])
+        data = json.loads(raw[start:end])
+        # candidates_scored → top8 へのキー正規化
+        if "candidates_scored" in data and "top8" not in data:
+            data["top8"] = data["candidates_scored"]
+        return data
     except Exception:
         return {}
 
@@ -484,6 +468,8 @@ def run_analysis(candidate_text: str, companies: dict):
     if FAST_MODE:
         progress = st.progress(0, text="Claudeがマッチング中...")
         step1_data = step1_rank_companies(candidate_text, companies, hire_profiles)
+        progress.progress(70, text="Pythonが選出・分類中...")
+        step1_data = python_select_top8(step1_data, candidates)
         progress.progress(100, text="完了！")
         progress.empty()
         if not step1_data:
@@ -522,6 +508,58 @@ def run_analysis(candidate_text: str, companies: dict):
         st.error("最終出力の生成に失敗しました")
 
 
+def python_select_top8(step1_data: dict, candidates: list) -> dict:
+    """H確定・P計算・分類・配分選出をPythonで行い top8 を確定する"""
+    all_scored = step1_data.get("top8", [])
+    if not all_scored:
+        return step1_data
+
+    # 内定実績のある企業名セットを作成（タイブレーク用）
+    hire_companies = set()
+    for c in candidates:
+        decided = str(c.get("decided_company", "")).strip()
+        if decided and decided != "None":
+            hire_companies.add(decided)
+
+    # H確定・P計算・分類
+    for r in all_scored:
+        cname = r.get("company_name", "")
+        registered_h = get_h_score(cname)
+        r["H"] = registered_h if registered_h is not None else r.get("H_estimated", 3)
+        r["P"] = r["S"] + r["H"] if isinstance(r.get("S"), int) else 0
+        r["_category"] = classify_company(r)
+        r["_has_hire"] = any(decided in cname or cname in decided for decided in hire_companies)
+
+    def sort_key(r):
+        return (-r.get("P", 0), -(1 if r.get("_has_hire") else 0))
+
+    challenge = sorted([r for r in all_scored if r["_category"] == "チャレンジ"], key=sort_key)
+    honmei    = sorted([r for r in all_scored if r["_category"] == "本命"],       key=sort_key)
+    safety    = sorted([r for r in all_scored if r["_category"] == "セーフティー"], key=sort_key)
+
+    selected = challenge[:2] + honmei[:3] + safety[:4]
+
+    # 8社未満の場合、その他からPが高い順に補充
+    if len(selected) < 8:
+        selected_sheets = {r.get("sheet_name") for r in selected}
+        others = sorted(
+            [r for r in all_scored if r.get("sheet_name") not in selected_sheets],
+            key=sort_key
+        )
+        selected.extend(others[:8 - len(selected)])
+
+    # 8社超の場合はPが高い順にトリム
+    if len(selected) > 8:
+        selected = sorted(selected, key=sort_key)[:8]
+
+    # rank を振り直す
+    for i, r in enumerate(selected, 1):
+        r["rank"] = i
+
+    step1_data["top8"] = selected
+    return step1_data
+
+
 def classify_company(r: dict) -> str:
     """P = S + H（高いほど内定確度が高い）で分類"""
     S = r.get("S", 0)
@@ -557,7 +595,7 @@ def show_results_fast(data: dict):
     ]
 
     for category, label in categories:
-        items = [r for r in top8 if r.get("category") == category]
+        items = [r for r in top8 if r.get("_category") == category]
         if not items:
             continue
         st.markdown(f"### {label}")
