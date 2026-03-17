@@ -485,7 +485,6 @@ def show_results_fast(data: dict):
         ("チャレンジ", "🔥 チャレンジ"),
         ("本命", "⭐ 本命"),
         ("セーフティー", "🛡️ セーフティー"),
-        ("参考", "📋 参考"),
     ]
 
     for category, label in categories:
