@@ -266,8 +266,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 - H未登録企業はSを保守的に採点し、H_estimatedを推定（1=最難関, 5=最も通りやすい）
 
 ② 内定実績ボーナス
-- 過去内定者と類似する場合、S +1点（最大5点）
-- match_reasonに「※内定実績との類似：〇〇と類似」と根拠を記載
+- 過去内定者と類似する場合、S +1点（最大5点）。理由はS採点に反映するのみでJSON出力には不要。
 
 ## 求職者情報
 {candidate_text}
@@ -530,6 +529,7 @@ def step1b_generate_match_reasons(candidate_text: str, top8: list, companies: di
 """
 
     prompt = f"""以下の求職者と8社の求人情報をもとに、各社のマッチ理由を生成してください。
+過去内定者プロフィールと類似する場合は「※内定実績との類似：〇〇と類似」と根拠を含めてください。
 
 ## 求職者情報
 {candidate_text}
