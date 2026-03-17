@@ -498,10 +498,10 @@ def classify_company(r: dict) -> str:
     P = S + H
     if P >= 7 and A >= 2:
         return "セーフティー"
-    if P <= 6 and A >= 4:
-        return "チャレンジ"
-    if A >= 3:
+    if 5 <= P <= 6 and A >= 3:
         return "本命"
+    if 2 <= P <= 4 and A >= 4:
+        return "チャレンジ"
     return "その他"
 
 
