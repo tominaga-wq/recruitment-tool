@@ -193,7 +193,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 
     prompt = f"""あなたは人材紹介会社のシニアキャリアアドバイザーです。
 
-求職者情報と求人要件を照合し、内定確度の高い順に必ず上位8社を選んでください。
+求職者情報と求人要件を照合し、成約率が最も高くなるよう上位8社を選んでください。
 完全にマッチしない場合でも、相対的に可能性が高い順に必ず8社を選出してください。
 また、求職者の転職理由・今回の転職で目指しているキャリア・将来プランを文脈から推測してください。
 
@@ -201,6 +201,12 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 過去内定者に似た特徴（職種・業界・経験年数・年齢・スキル）を持つ候補者は内定確度が高いと判断してください。
 
 【重要】各企業に【NG要件】が設定されている場合、候補者がそのNG要件に1つでも該当するならその企業は必ず選出から除外してください。NG要件に該当する企業は8社のカウントに含めないでください。
+
+## 各項目を1〜5点で採点してください
+- S（スキルマッチ）：技術・経験の合致度。5=完全一致、1=ほぼ合致なし
+- C（キャリアの連続性）：職種・業界の親和性。5=自然なステップアップ、1=全く異なる
+- A（志向性の一致）：本人の希望条件・転職理由との合致度。5=まさに求めている、1=全く合わない
+- H（採用ハードル）：選考難易度。5=最難関（書類落ちリスク大）、1=容易（ほぼ確実に通過）
 
 ## 求職者情報
 {candidate_text}
@@ -225,7 +231,10 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
       "sheet_name": "シート名",
       "company_name": "企業名",
       "position": "ポジション名",
-      "match_score": 85,
+      "S": 4,
+      "C": 3,
+      "A": 5,
+      "H": 4,
       "match_reason": "スキル・経験面からのマッチ理由（候補者の具体的な実績・数字を引用して3〜4文）"
     }}
   ]
@@ -431,12 +440,28 @@ def run_analysis(candidate_text: str, companies: dict):
         st.error("最終出力の生成に失敗しました")
 
 
+def classify_company(r: dict) -> str:
+    """S/C/A/Hスコアから チャレンジ/本命/セーフティー を判定"""
+    S = r.get("S", 0)
+    C = r.get("C", 0)
+    A = r.get("A", 0)
+    H = r.get("H", 0)
+    # 本命を最優先で判定
+    if A >= 3 and H <= 3 and (S + C) - H >= 2 and (S + C) >= 7:
+        return "本命"
+    if A >= 4 and H >= 4 and (S + C) >= 5:
+        return "チャレンジ"
+    if A >= 2 and H <= 2 and (S + C) >= 8:
+        return "セーフティー"
+    return "参考"
+
+
 def show_results_fast(data: dict):
     summary = data.get("candidate_summary", {})
     top8 = data.get("top8", [])
     name = summary.get("name", "候補者")
 
-    st.success(f"✅ 分析完了！ {name}さんへの推奨求人 上位8社")
+    st.success(f"✅ 分析完了！ {name}さんへの推奨求人")
 
     with st.expander("📌 AIが推測した転職背景", expanded=True):
         col1, col2, col3 = st.columns(3)
@@ -444,16 +469,37 @@ def show_results_fast(data: dict):
         col2.markdown(f"**今回の転職で目指しているキャリア**\n\n{summary.get('inferred_career', '')}")
         col3.markdown(f"**将来プラン**\n\n{summary.get('inferred_future', '')}")
 
-    st.markdown("---")
-
+    # 分類
     for r in top8:
-        with st.expander(f"**#{r['rank']} {r['company_name']}**　スコア: {r.get('match_score', '-')}/100", expanded=r['rank'] <= 3):
-            col_left, col_right = st.columns([3, 1])
-            with col_left:
-                st.write(f"**ポジション：** {r.get('position', '')}")
-                st.markdown(f"**マッチ理由**\n\n{r.get('match_reason', '')}")
-            with col_right:
-                st.metric("内定確度スコア", f"{r.get('match_score', '-')}/100")
+        r["_category"] = classify_company(r)
+
+    categories = [
+        ("本命", "⭐ 本命", "経験が100%活かせます。先方も欲しがっているので、条件交渉もしやすいです。強く推しましょう。"),
+        ("チャレンジ", "🔥 チャレンジ", "難易度は高いですが、志向性にぴったりです。一緒に受かるための対策を練りましょう。"),
+        ("セーフティー", "🛡️ セーフティー", "まずここで内定を一つ確保し、精神的な余裕を持って本命に臨みましょう。"),
+        ("参考", "📋 参考", "条件は一部合致しています。状況に応じて検討してください。"),
+    ]
+
+    for category, label, ca_message in categories:
+        items = [r for r in top8 if r["_category"] == category]
+        if not items:
+            continue
+        st.markdown(f"### {label}")
+        st.info(f"**CAへの指示：** {ca_message}")
+        for r in items:
+            S, C, A, H = r.get("S", "-"), r.get("C", "-"), r.get("A", "-"), r.get("H", "-")
+            header = f"**{r['company_name']}**　S:{S} C:{C} A:{A} H:{H}"
+            with st.expander(header, expanded=True):
+                col_left, col_right = st.columns([3, 1])
+                with col_left:
+                    st.write(f"**ポジション：** {r.get('position', '')}")
+                    st.markdown(f"**マッチ理由**\n\n{r.get('match_reason', '')}")
+                with col_right:
+                    st.metric("S スキル", f"{S}/5")
+                    st.metric("C 連続性", f"{C}/5")
+                    st.metric("A 志向性", f"{A}/5")
+                    st.metric("H ハードル", f"{H}/5")
+        st.markdown("---")
 
 
 def show_results(data: dict):
