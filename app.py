@@ -208,6 +208,8 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 - A（志向性の一致）：本人の希望条件・転職理由との合致度。5=まさに求めている、1=全く合わない
 - H（採用ハードル）：選考難易度。5=最難関（書類落ちリスク大）、1=容易（ほぼ確実に通過）
 
+【採点の注意】H（採用ハードル）は必ず1〜5の範囲で分散させてください。8社の中に必ずH=4か5の企業を2〜3社、H=1か2の企業を2〜3社含めてください。全社をH=3にするのは禁止です。
+
 ## 求職者情報
 {candidate_text}
 
@@ -451,7 +453,7 @@ def classify_company(r: dict) -> str:
         return "本命"
     if A >= 4 and H >= 4 and (S + C) >= 5:
         return "チャレンジ"
-    if A >= 2 and H <= 2 and (S + C) >= 8:
+    if A >= 2 and H <= 2 and (S + C) >= 6:
         return "セーフティー"
     return "参考"
 
