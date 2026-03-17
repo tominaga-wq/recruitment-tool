@@ -297,7 +297,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
       "S": 4,
       "A": 5,
       "H_estimated": 3,
-      "match_reason": "スキル・経験面からのマッチ理由（候補者の具体的な実績・数字を引用して3〜4文）"
+      "match_reason": "マッチ理由（1〜2文で簡潔に）"
     }}
   ]
 }}
@@ -305,7 +305,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 """
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=6000,
+        max_tokens=10000,
         messages=[{"role": "user", "content": prompt}],
     )
     raw = message.content[0].text
