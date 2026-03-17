@@ -248,9 +248,15 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 
 【H採点の必須ルール】
 - 候補者が【必須要件（Must）】を1つでも満たさない場合は、必ずH=5にしてください
-- 必須要件を全て満たす場合は、競争率・企業人気度・条件の厳しさに応じて1〜4で採点してください
-- 8社の中でH=1〜2の企業を必ず2〜3社含めてください（必須要件を全て満たし、かつ通過率が高い企業）
+- 必須要件を全て満たす場合は、企業別難易度データと競争率に応じて1〜4で採点してください
 - 全社をH=3にすることは厳禁です
+
+## カテゴリ分類ルール（必ず以下の社数になるよう8社を選んでください）
+- チャレンジ（1〜2社）：志向性が高い（A≥3）が難易度も高い（H≥4）企業。意欲を上げる格上案件
+- 本命（2〜3社）：志向性が一定以上（A≥3）かつ難易度が中程度以下（H≤3）で実力と合っている企業
+- セーフティー（3〜5社）：難易度が低く（H≤2）確実に通過できる企業。内定確保のための安全牌
+
+【重要】必ずチャレンジ1〜2社・本命2〜3社・セーフティー3〜5社の合計8社になるよう企業を選んでください。
 
 ## 求職者情報
 {candidate_text}
@@ -283,6 +289,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
       "C": 3,
       "A": 5,
       "H": 4,
+      "category": "本命",
       "match_reason": "スキル・経験面からのマッチ理由（候補者の具体的な実績・数字を引用して3〜4文）"
     }}
   ]
@@ -519,9 +526,9 @@ def show_results_fast(data: dict):
         col2.markdown(f"**今回の転職で目指しているキャリア**\n\n{summary.get('inferred_career', '')}")
         col3.markdown(f"**将来プラン**\n\n{summary.get('inferred_future', '')}")
 
-    # 分類
+    # Claudeが出力したcategoryを使用（なければフォールバックで計算）
     for r in top8:
-        r["_category"] = classify_company(r)
+        r["_category"] = r.get("category") or classify_company(r)
 
     categories = [
         ("チャレンジ", "🔥 チャレンジ"),
