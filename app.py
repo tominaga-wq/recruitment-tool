@@ -39,19 +39,28 @@ COMPANY_PASS_DIFFICULTY = {
     "ガリバー": 5, "ソフトバンク販売クルー": 5, "ウィルオブコンストラクション": 5, "夢真": 5,
 }
 
-def get_h_score(company_name: str) -> int:
-    """企業名からHスコアを取得（1=最難関, 5=最も通りやすい）。未登録企業はデフォルト3"""
+def get_h_score(company_name: str) -> int | None:
+    """企業名からHスコアを取得。未登録企業はNone（Claudeの推定値を使う）"""
     for key, val in COMPANY_PASS_DIFFICULTY.items():
         if key in company_name or company_name in key:
             return val
-    return 3  # デフォルト
+    return None
 
 def build_difficulty_hint(companies: dict) -> str:
-    """プロンプト用: 企業別Hスコア一覧"""
-    lines = []
+    """プロンプト用: 登録済み企業のHスコア一覧と未登録企業リスト"""
+    registered = []
+    unregistered = []
     for sheet_name, info in companies.items():
-        h = get_h_score(info["company_name"])
-        lines.append(f"- {info['company_name']}：H={h}")
+        cname = info["company_name"]
+        h = get_h_score(cname)
+        if h is not None:
+            registered.append(f"- {cname}：H={h}（登録済み）")
+        else:
+            unregistered.append(f"- {cname}")
+    lines = registered
+    if unregistered:
+        lines.append("\n【H未登録企業】求人票の必須要件・条件の厳しさからHを推定してください：")
+        lines.extend(unregistered)
     return "\n".join(lines)
 
 # Excelファイルパス（ローカル or アップロードファイル）
@@ -239,11 +248,12 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 
 【重要】各企業に【NG要件】が設定されている場合、候補者がそのNG要件に1つでも該当するならその企業は必ず選出から除外してください。NG要件に該当する企業は8社のカウントに含めないでください。
 
-## あなたが採点する項目（S と A のみ）
+## あなたが採点する項目
 - S（スキルマッチ）：経験・経歴の親和性と過去内定事例との類似度を総合評価。5=完全一致、1=ほぼ合致なし
 - A（志向性の一致）：転職理由・希望する次のキャリア（業界・職種）・将来プランを総合的に判断した合致度。5=まさに求めている、1=全く合わない
+- H_estimated（H未登録企業のみ）：登録済みHがない企業について、必須要件・年齢制限・経験年数・学歴条件の厳しさからHを推定（1=最難関, 5=最も通りやすい）。またH未登録企業はSを厳しめ（保守的）に採点してください。
 
-※ H（採用ハードル）はシステムが自動付与するため、あなたは採点不要です。
+※ H登録済み企業についてはH_estimatedの出力不要です。
 
 ## 求職者情報
 {candidate_text}
@@ -273,6 +283,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
       "position": "ポジション名",
       "S": 4,
       "A": 5,
+      "H_estimated": 3,
       "match_reason": "スキル・経験面からのマッチ理由（候補者の具体的な実績・数字を引用して3〜4文）"
     }}
   ]
@@ -506,9 +517,10 @@ def show_results_fast(data: dict):
         col2.markdown(f"**今回の転職で目指しているキャリア**\n\n{summary.get('inferred_career', '')}")
         col3.markdown(f"**将来プラン**\n\n{summary.get('inferred_future', '')}")
 
-    # システムがHを付与してPを計算し分類
+    # H: 登録済みはテーブル値、未登録はClaudeの推定値を使用
     for r in top8:
-        r["H"] = get_h_score(r.get("company_name", ""))
+        registered_h = get_h_score(r.get("company_name", ""))
+        r["H"] = registered_h if registered_h is not None else r.get("H_estimated", 3)
         r["P"] = r["S"] + r["H"] if isinstance(r.get("S"), int) else "-"
         r["_category"] = classify_company(r)
 
