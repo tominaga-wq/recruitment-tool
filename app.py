@@ -138,7 +138,7 @@ def load_company_requirements():
                 continue
             label = str(row[0])
             value = str(row[1]) if row[1] else ""
-            if "求人データ" in label:
+            if "求人データ" in label or "求人票データ" in label:
                 parts = label.split("▶▶")
                 info["company_name"] = parts[-1].strip() if len(parts) > 1 else label.replace("求人データ", "").strip()
             elif "参考ポジション" in label:
