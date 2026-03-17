@@ -241,8 +241,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 【重要】各企業に【NG要件】が設定されている場合、候補者がそのNG要件に1つでも該当するならその企業は必ず選出から除外してください。NG要件に該当する企業は8社のカウントに含めないでください。
 
 ## 各項目を1〜5点で採点してください
-- S（スキルマッチ）：技術・経験の合致度。5=完全一致、1=ほぼ合致なし
-- C（キャリアの連続性）：職種・業界の親和性。5=自然なステップアップ、1=全く異なる
+- S（スキルマッチ）：経験・経歴の親和性と過去内定事例との類似度を総合評価。5=完全一致、1=ほぼ合致なし
 - A（志向性の一致）：本人の希望条件・転職理由との合致度。5=まさに求めている、1=全く合わない
 - H（採用ハードル）：選考難易度。5=最難関（書類落ちリスク大）、1=容易（ほぼ確実に通過）
 
@@ -289,7 +288,6 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
       "company_name": "企業名",
       "position": "ポジション名",
       "S": 4,
-      "C": 3,
       "A": 5,
       "H": 4,
       "category": "本命",
@@ -499,19 +497,15 @@ def run_analysis(candidate_text: str, companies: dict):
 
 
 def classify_company(r: dict) -> str:
-    """S/C/A/Hスコアから チャレンジ/本命/セーフティー を判定"""
+    """S/A/Hスコアから チャレンジ/本命/セーフティー を判定"""
     S = r.get("S", 0)
-    C = r.get("C", 0)
     A = r.get("A", 0)
     H = r.get("H", 0)
-    # チャレンジ：難易度が高く、志向性も最低限ある
     if H >= 4 and A >= 3:
         return "チャレンジ"
-    # セーフティー：難易度が低くスキルは十分
     if H <= 2 and A >= 2:
         return "セーフティー"
-    # 本命：志向性・実力ともに一定以上
-    if A >= 3 and (S + C) >= 5:
+    if A >= 3 and S >= 3:
         return "本命"
     return "参考"
 
@@ -545,8 +539,8 @@ def show_results_fast(data: dict):
             continue
         st.markdown(f"### {label}")
         for r in items:
-            S, C, A, H = r.get("S", "-"), r.get("C", "-"), r.get("A", "-"), r.get("H", "-")
-            header = f"**{r['company_name']}**　S:{S} C:{C} A:{A} H:{H}"
+            S, A, H = r.get("S", "-"), r.get("A", "-"), r.get("H", "-")
+            header = f"**{r['company_name']}**　S:{S} A:{A} H:{H}"
             with st.expander(header, expanded=True):
                 col_left, col_right = st.columns([3, 1])
                 with col_left:
@@ -554,7 +548,6 @@ def show_results_fast(data: dict):
                     st.markdown(f"**マッチ理由**\n\n{r.get('match_reason', '')}")
                 with col_right:
                     st.metric("S スキル", f"{S}/5")
-                    st.metric("C 連続性", f"{C}/5")
                     st.metric("A 志向性", f"{A}/5")
                     st.metric("H ハードル", f"{H}/5")
         st.markdown("---")
