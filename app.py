@@ -452,8 +452,8 @@ def classify_company(r: dict) -> str:
     C = r.get("C", 0)
     A = r.get("A", 0)
     H = r.get("H", 0)
-    # チャレンジ：志向性が高く難易度も高い
-    if A >= 4 and H >= 4:
+    # チャレンジ：難易度が高く、志向性も最低限ある
+    if H >= 4 and A >= 3:
         return "チャレンジ"
     # セーフティー：難易度が低くスキルは十分
     if H <= 2 and A >= 2:
