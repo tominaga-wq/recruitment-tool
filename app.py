@@ -18,6 +18,43 @@ APP_PASSWORD = st.secrets.get("APP_PASSWORD", "Unipo1113!")
 SLACK_BOT_TOKEN = st.secrets.get("SLACK_BOT_TOKEN", "")
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "Lionking7")
 
+# 企業別選考通過難易度（1=最難関, 5=最も通過しやすい）
+COMPANY_PASS_DIFFICULTY = {
+    # 1: 最難関
+    "ラクス": 1, "フリー": 1, "マネーフォワード": 1, "スマートHR": 1,
+    # 2
+    "エフシーイー": 2, "トキウム": 2, "エイチアールクラウド": 2, "データX": 2,
+    "スマートキャンプ": 2, "パーソルキャリア": 2, "マイナビ": 2, "レバレジーズ": 2,
+    "ローコード": 2, "タイミー": 2, "マイビジョン": 2, "アサイン": 2,
+    # 3
+    "ワークポート": 3, "ウズウズ": 3, "ヴォイスキャリア": 3,
+    "エス・エム・エス": 3, "ヘイフィールド": 3, "プレックス": 3, "ギークリー": 3,
+    "アーキベース": 3, "エックスマイル": 3, "ネクストビート": 3, "ヤマシタ": 3,
+    "ヒュープロ": 3, "エイチアールキャリア": 3, "イシン": 3, "レガシード": 3,
+    # 4
+    "ゼネラル・パーチェス": 4, "大同生命保険": 4, "セレブリックス": 4, "一休": 4,
+    "リクルートスタッフィング": 4, "ジールコミュニケーションズ": 4, "ブリッジワン": 4,
+    "はなまる": 4, "ジェノバ": 4, "ほけんの窓口": 4, "イッポ": 4,
+    # 5: 最も通過しやすい
+    "ガリバー": 5, "ソフトバンク販売クルー": 5, "ウィルオブコンストラクション": 5, "夢真": 5,
+}
+
+def build_difficulty_hint(companies: dict) -> str:
+    """企業名→難易度ヒント文字列を生成（1=難, 5=易 → H換算: H=6-難易度）"""
+    lines = []
+    for sheet_name, info in companies.items():
+        cname = info["company_name"]
+        # 部分一致でマッチング
+        matched = None
+        for key, val in COMPANY_PASS_DIFFICULTY.items():
+            if key in cname or cname in key:
+                matched = val
+                break
+        if matched is not None:
+            h_equiv = 6 - matched  # 1=難→H=5、5=易→H=1
+            lines.append(f"- {cname}：通過難易度{matched}（H採点の目安={h_equiv}）")
+    return "\n".join(lines)
+
 # Excelファイルパス（ローカル or アップロードファイル）
 EXCEL_FILENAME = "求人確度出力マスターシート.xlsx"
 LOCAL_EXCEL_PATH = r"C:\Users\takeu\Downloads\求人確度出力マスターシート.xlsx"
@@ -190,6 +227,7 @@ def build_company_list(companies: dict) -> str:
 def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: str = "") -> list:
     client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
     company_list = build_company_list(companies)
+    difficulty_hint = build_difficulty_hint(companies)
 
     prompt = f"""あなたは人材紹介会社のシニアキャリアアドバイザーです。
 
@@ -219,6 +257,10 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 
 ## 各企業の求人要件
 {company_list}
+
+## 企業別・選考通過難易度データ（実績ベース）
+以下のH採点目安を参考にしてください。ただし候補者が必須要件を満たさない場合は必ずH=5にしてください。
+{difficulty_hint}
 
 {hire_profiles}
 
