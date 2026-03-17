@@ -262,6 +262,11 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 以下のH採点目安を参考にしてください。ただし候補者が必須要件を満たさない場合は必ずH=5にしてください。
 {difficulty_hint}
 
+【セーフティー確保の必須ルール】
+通過難易度5（最も通過しやすい）の企業を上位8社の中に必ず2社以上含めてください。
+該当企業：{", ".join([k for k, v in COMPANY_PASS_DIFFICULTY.items() if v == 5])}
+これらの企業はH=1で採点してください。
+
 {hire_profiles}
 
 ## 出力形式（JSONのみ返してください）
