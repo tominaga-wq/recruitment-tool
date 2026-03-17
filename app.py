@@ -474,18 +474,17 @@ def show_results_fast(data: dict):
         r["_category"] = classify_company(r)
 
     categories = [
-        ("本命", "⭐ 本命", "経験が100%活かせます。先方も欲しがっているので、条件交渉もしやすいです。強く推しましょう。"),
-        ("チャレンジ", "🔥 チャレンジ", "難易度は高いですが、志向性にぴったりです。一緒に受かるための対策を練りましょう。"),
-        ("セーフティー", "🛡️ セーフティー", "まずここで内定を一つ確保し、精神的な余裕を持って本命に臨みましょう。"),
-        ("参考", "📋 参考", "条件は一部合致しています。状況に応じて検討してください。"),
+        ("本命", "⭐ 本命"),
+        ("チャレンジ", "🔥 チャレンジ"),
+        ("セーフティー", "🛡️ セーフティー"),
+        ("参考", "📋 参考"),
     ]
 
-    for category, label, ca_message in categories:
+    for category, label in categories:
         items = [r for r in top8 if r["_category"] == category]
         if not items:
             continue
         st.markdown(f"### {label}")
-        st.info(f"**CAへの指示：** {ca_message}")
         for r in items:
             S, C, A, H = r.get("S", "-"), r.get("C", "-"), r.get("A", "-"), r.get("H", "-")
             header = f"**{r['company_name']}**　S:{S} C:{C} A:{A} H:{H}"
