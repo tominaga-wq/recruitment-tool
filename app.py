@@ -314,7 +314,9 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
       "position": "ポジション名",
       "S": 4,
       "A": 5,
-      "H_estimated": 3,
+      "H": 3,
+      "P": 7,
+      "category": "セーフティー",
       "match_reason": "スキル・経験面からのマッチ理由（候補者の具体的な実績・数字を引用して3〜4文）"
     }}
   ]
@@ -548,13 +550,6 @@ def show_results_fast(data: dict):
         col2.markdown(f"**今回の転職で目指しているキャリア**\n\n{summary.get('inferred_career', '')}")
         col3.markdown(f"**将来プラン**\n\n{summary.get('inferred_future', '')}")
 
-    # H: 登録済みはテーブル値、未登録はClaudeの推定値を使用
-    for r in top8:
-        registered_h = get_h_score(r.get("company_name", ""))
-        r["H"] = registered_h if registered_h is not None else r.get("H_estimated", 3)
-        r["P"] = r["S"] + r["H"] if isinstance(r.get("S"), int) else "-"
-        r["_category"] = classify_company(r)
-
     categories = [
         ("チャレンジ", "🔥 チャレンジ"),
         ("本命", "⭐ 本命"),
@@ -562,7 +557,7 @@ def show_results_fast(data: dict):
     ]
 
     for category, label in categories:
-        items = [r for r in top8 if r["_category"] == category]
+        items = [r for r in top8 if r.get("category") == category]
         if not items:
             continue
         st.markdown(f"### {label}")
