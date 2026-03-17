@@ -479,17 +479,17 @@ def run_analysis(candidate_text: str, companies: dict):
 
 
 def classify_company(r: dict) -> str:
-    """P = 10 - (S + H) のゴルフスコア方式で分類"""
+    """P = S + H（高いほど内定確度が高い）で分類"""
     S = r.get("S", 0)
     A = r.get("A", 0)
     H = r.get("H", 3)
-    P = 10 - (S + H)
-    if P >= 6 and A >= 4:
-        return "チャレンジ"
-    if 3 <= P <= 5 and A >= 3:
-        return "本命"
-    if P <= 2 and A >= 2:
+    P = S + H
+    if P >= 9 and A >= 2:
         return "セーフティー"
+    if 6 <= P <= 8 and A >= 3:
+        return "本命"
+    if P <= 5 and A >= 4:
+        return "チャレンジ"
     return "その他"
 
 
@@ -509,7 +509,7 @@ def show_results_fast(data: dict):
     # システムがHを付与してPを計算し分類
     for r in top8:
         r["H"] = get_h_score(r.get("company_name", ""))
-        r["P"] = 10 - (r["S"] + r["H"]) if isinstance(r.get("S"), int) else "-"
+        r["P"] = r["S"] + r["H"] if isinstance(r.get("S"), int) else "-"
         r["_category"] = classify_company(r)
 
     categories = [
