@@ -296,8 +296,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
       "position": "ポジション名",
       "S": 4,
       "A": 5,
-      "H_estimated": 3,
-      "match_reason": "マッチ理由（1〜2文で簡潔に）"
+      "H_estimated": 3
     }}
   ]
 }}
@@ -305,7 +304,7 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
 """
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=10000,
+        max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )
     raw = message.content[0].text
@@ -468,13 +467,17 @@ def run_analysis(candidate_text: str, companies: dict):
     hire_profiles = build_hire_profiles(candidates, companies)
 
     if FAST_MODE:
-        progress = st.progress(0, text="Claudeがマッチング中...")
+        progress = st.progress(0, text="Step 1/2: Claudeが採点中...")
         step1_data = step1_rank_companies(candidate_text, companies, hire_profiles)
         if not step1_data or not step1_data.get("top8"):
             st.error("Step1の分析に失敗しました")
             return
-        progress.progress(70, text="Pythonが選出・分類中...")
+        progress.progress(50, text="Pythonが選出・分類中...")
         step1_data = python_select_top8(step1_data, candidates)
+        progress.progress(70, text="Step 2/2: Claudeがマッチ理由を生成中...")
+        match_reasons = step1b_generate_match_reasons(candidate_text, step1_data.get("top8", []), companies)
+        for r in step1_data.get("top8", []):
+            r["match_reason"] = match_reasons.get(r.get("sheet_name", ""), "")
         progress.progress(100, text="完了！")
         progress.empty()
         show_results_fast(step1_data)
@@ -508,6 +511,53 @@ def run_analysis(candidate_text: str, companies: dict):
         show_results(final_data)
     else:
         st.error("最終出力の生成に失敗しました")
+
+
+def step1b_generate_match_reasons(candidate_text: str, top8: list, companies: dict) -> dict:
+    """Python選出後の8社に対してmatch_reasonを生成する"""
+    client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+
+    companies_info = ""
+    for r in top8:
+        sheet = r.get("sheet_name", "")
+        info = companies.get(sheet, {})
+        companies_info += f"""
+---
+【企業名】{r['company_name']}（シート: {sheet}）
+【ポジション】{r.get('position', '')}
+【必須要件】{info.get('must', '')}
+【歓迎要件】{info.get('want', '')}
+"""
+
+    prompt = f"""以下の求職者と8社の求人情報をもとに、各社のマッチ理由を生成してください。
+
+## 求職者情報
+{candidate_text}
+
+## 8社の求人情報
+{companies_info}
+
+## 出力形式（JSONのみ）
+{{
+  "match_reasons": {{
+    "シート名": "候補者の具体的な実績・数字を引用したマッチ理由（2〜3文）",
+    ...
+  }}
+}}"""
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=3000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = message.content[0].text
+    try:
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        data = json.loads(raw[start:end])
+        return data.get("match_reasons", {})
+    except Exception:
+        return {}
 
 
 def python_select_top8(step1_data: dict, candidates: list) -> dict:
