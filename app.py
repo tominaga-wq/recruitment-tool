@@ -382,11 +382,26 @@ def step3_enrich_pitches(candidate_text: str, step1_data: dict, gemini_info: str
         return {}
 
 
-def run_analysis(candidate_text: str, companies: dict):
-    progress = st.progress(0, text="Step 1/3 : Claudeがマッチング中...")
+# 検証用: TrueにするとStep1のマッチング結果のみ表示（訴求文生成をスキップ）
+FAST_MODE = True
 
+
+def run_analysis(candidate_text: str, companies: dict):
     candidates = load_candidates()
     hire_profiles = build_hire_profiles(candidates, companies)
+
+    if FAST_MODE:
+        progress = st.progress(0, text="Claudeがマッチング中...")
+        step1_data = step1_rank_companies(candidate_text, companies, hire_profiles)
+        progress.progress(100, text="完了！")
+        progress.empty()
+        if not step1_data:
+            st.error("Step1の分析に失敗しました")
+            return
+        show_results_fast(step1_data)
+        return
+
+    progress = st.progress(0, text="Step 1/3 : Claudeがマッチング中...")
     step1_data = step1_rank_companies(candidate_text, companies, hire_profiles)
     if not step1_data:
         st.error("Step1の分析に失敗しました")
@@ -414,6 +429,31 @@ def run_analysis(candidate_text: str, companies: dict):
         show_results(final_data)
     else:
         st.error("最終出力の生成に失敗しました")
+
+
+def show_results_fast(data: dict):
+    summary = data.get("candidate_summary", {})
+    top8 = data.get("top8", [])
+    name = summary.get("name", "候補者")
+
+    st.success(f"✅ 分析完了！ {name}さんへの推奨求人 上位8社")
+
+    with st.expander("📌 AIが推測した転職背景", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        col1.markdown(f"**転職理由**\n\n{summary.get('inferred_reason', '')}")
+        col2.markdown(f"**今回の転職で目指しているキャリア**\n\n{summary.get('inferred_career', '')}")
+        col3.markdown(f"**将来プラン**\n\n{summary.get('inferred_future', '')}")
+
+    st.markdown("---")
+
+    for r in top8:
+        with st.expander(f"**#{r['rank']} {r['company_name']}**　スコア: {r.get('match_score', '-')}/100", expanded=r['rank'] <= 3):
+            col_left, col_right = st.columns([3, 1])
+            with col_left:
+                st.write(f"**ポジション：** {r.get('position', '')}")
+                st.markdown(f"**マッチ理由**\n\n{r.get('match_reason', '')}")
+            with col_right:
+                st.metric("内定確度スコア", f"{r.get('match_score', '-')}/100")
 
 
 def show_results(data: dict):
