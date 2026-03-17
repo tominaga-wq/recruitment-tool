@@ -482,8 +482,8 @@ def show_results_fast(data: dict):
         r["_category"] = classify_company(r)
 
     categories = [
-        ("本命", "⭐ 本命"),
         ("チャレンジ", "🔥 チャレンジ"),
+        ("本命", "⭐ 本命"),
         ("セーフティー", "🛡️ セーフティー"),
         ("参考", "📋 参考"),
     ]
