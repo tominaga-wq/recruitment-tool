@@ -317,7 +317,9 @@ def step1_rank_companies(candidate_text: str, companies: dict, hire_profiles: st
         if "candidates_scored" in data and "top8" not in data:
             data["top8"] = data["candidates_scored"]
         return data
-    except Exception:
+    except Exception as e:
+        st.error(f"Step1 JSONパースエラー: {e}")
+        st.code(raw[:3000])
         return {}
 
 
@@ -468,13 +470,13 @@ def run_analysis(candidate_text: str, companies: dict):
     if FAST_MODE:
         progress = st.progress(0, text="Claudeがマッチング中...")
         step1_data = step1_rank_companies(candidate_text, companies, hire_profiles)
+        if not step1_data or not step1_data.get("top8"):
+            st.error("Step1の分析に失敗しました")
+            return
         progress.progress(70, text="Pythonが選出・分類中...")
         step1_data = python_select_top8(step1_data, candidates)
         progress.progress(100, text="完了！")
         progress.empty()
-        if not step1_data:
-            st.error("Step1の分析に失敗しました")
-            return
         show_results_fast(step1_data)
         return
 
